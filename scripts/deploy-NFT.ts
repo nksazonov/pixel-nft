@@ -8,10 +8,6 @@ async function main(): Promise<void> {
   await NFT.deployed();
 
   console.log('Contract deployed to:', NFT.address);
-
-  await NFT.mint();
-
-  console.log(await NFT.getTokenSVG(0));
 }
 
 main().catch((error) => {
