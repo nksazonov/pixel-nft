@@ -3,9 +3,12 @@ import 'dotenv/config';
 import '@typechain/hardhat';
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-waffle';
+import '@nomiclabs/hardhat-etherscan';
 import type { HardhatUserConfig } from 'hardhat/types';
 
 const ACCOUNTS = process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [];
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY ?? '';
+const POLYGON_API_KEY = process.env.POLYGON_API_KEY ?? '';
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -49,6 +52,14 @@ const config: HardhatUserConfig = {
         ? Number.parseInt(process.env.GENERIC_GAS_PRICE)
         : 'auto',
       accounts: ACCOUNTS,
+    },
+  },
+  etherscan: {
+    apiKey: {
+      mainnet: ETHERSCAN_API_KEY,
+      goerli: ETHERSCAN_API_KEY,
+      polygon: POLYGON_API_KEY,
+      polygonMumbai: POLYGON_API_KEY,
     },
   },
 };
