@@ -12,6 +12,8 @@ import '@openzeppelin/contracts/utils/Base64.sol';
 
 // TODO: refactor
 contract NFT is ERC721 {
+	using Strings for uint8;
+	using Strings for uint16;
 	using Strings for uint256;
 	using Counters for Counters.Counter;
 
@@ -19,13 +21,15 @@ contract NFT is ERC721 {
 	Counters.Counter private _tokenIDs;
 
 	// NFT size
-	uint8 constant NFT_SIZE = 16;
+	uint8 constant NFT_SIZE = 15;
 
 	// max image pixel size
-	uint8 constant NFT_PIXEL_SIZE = 16;
+	uint8 constant NFT_PIXEL_SIZE = 12;
 
 	// max image size
-	uint16 constant NFT_IMAGE_SIZE = NFT_SIZE * NFT_PIXEL_SIZE;
+	// TODO: report bug
+	// uint16 constant NFT_IMAGE_SIZE = NFT_SIZE * NFT_PIXEL_SIZE;
+	uint16 constant NFT_IMAGE_SIZE = 180;
 
 	// tokenID to token data
 	mapping(uint256 => uint8[NFT_SIZE][NFT_SIZE]) private _tokenDatas;
@@ -33,10 +37,11 @@ contract NFT is ERC721 {
 	constructor() ERC721('NFT Game', 'NFTG') {}
 
 	function mint() public {
-		_tokenIDs.increment();
 		uint256 newTokenID = _tokenIDs.current();
 		_safeMint(msg.sender, newTokenID);
 		_createRandomNFT(newTokenID);
+
+		_tokenIDs.increment();
 	}
 
 	// TODO: change names
@@ -48,21 +53,21 @@ contract NFT is ERC721 {
 			'",',
 			'"description": "Pixel NFT",',
 			'"image": "',
-			getImage(tokenID),
+			getTokenSVG(tokenID),
 			'"',
 			'}'
 		);
 		return string(abi.encodePacked('data:application/json;base64,', Base64.encode(dataURI)));
 	}
 
-	function getImage(uint256 tokenID) public view returns (string memory) {
+	function getTokenSVG(uint256 tokenID) public view returns (string memory) {
 		bytes memory svg = abi.encodePacked(
 			'<svg ',
 			'xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" ',
 			'viewBox="0 0 ',
-			NFT_IMAGE_SIZE,
+			NFT_IMAGE_SIZE.toString(),
 			' ',
-			NFT_IMAGE_SIZE,
+			NFT_IMAGE_SIZE.toString(),
 			'">',
 			_getPixelsSVG(tokenID),
 			'</svg>'
@@ -70,7 +75,13 @@ contract NFT is ERC721 {
 		return string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(svg)));
 	}
 
-	// INTERNAL FUNCTIONS
+	function getTokenData(uint256 tokenID) public view returns (uint8[NFT_SIZE][NFT_SIZE] memory) {
+		return _tokenDatas[tokenID];
+	}
+
+	// =================
+	// INTERNAL
+	// =================
 
 	// TODO: use better randomizing source
 	function _createRandomNFT(uint256 tokenID) internal {
@@ -91,29 +102,6 @@ contract NFT is ERC721 {
 		return ((num >> bitIdx) % 2 == 1);
 	}
 
-	// TODO: make sure 0 and 255 values can be achieved
-	function _8bitToHex(uint8 color) internal pure returns (string memory) {
-		(uint8 r, uint8 g, uint8 b) = _extractRGB(color);
-		uint8 red = (r * 255) / 7;
-		uint8 green = (g * 255) / 7;
-		uint8 blue = (b * 255) / 3;
-		return string(abi.encodePacked('#', red, green, blue));
-	}
-
-	function _extractRGB(uint8 color)
-		internal
-		pure
-		returns (
-			uint8 r,
-			uint8 g,
-			uint8 b
-		)
-	{
-		r = color >> 5;
-		g = (color >> 2) << 3;
-		b = color << 5;
-	}
-
 	function _getPixelsSVG(uint256 tokenID) internal view returns (bytes memory) {
 		bytes memory rows;
 
@@ -127,17 +115,17 @@ contract NFT is ERC721 {
 					cols,
 					'<rect ',
 					'x="',
-					x,
+					x.toString(),
 					'" y="',
-					y,
+					y.toString(),
 					'" ',
 					'width="',
-					NFT_PIXEL_SIZE,
+					NFT_PIXEL_SIZE.toString(),
 					'" height="',
-					NFT_PIXEL_SIZE,
+					NFT_PIXEL_SIZE.toString(),
 					'" ',
 					'fill="',
-					_8bitToHex(_tokenDatas[tokenID][row][col]),
+					_8bitToRGB(_tokenDatas[tokenID][row][col]),
 					'" ',
 					'/>'
 				);
@@ -146,5 +134,43 @@ contract NFT is ERC721 {
 		}
 
 		return rows;
+	}
+
+	// =================
+	// COLORS
+	// =================
+
+	function _8bitToRGB(uint8 color) internal pure returns (string memory) {
+		(uint8 r, uint8 g, uint8 b) = _extractRGB(color);
+		uint8 red = uint8((uint16(r) * 255) / 7);
+		uint8 green = uint8((uint16(g) * 255) / 7);
+		uint8 blue = uint8((uint16(b) * 255) / 3);
+
+		return
+			string(
+				abi.encodePacked(
+					'rgb(',
+					red.toString(),
+					',',
+					green.toString(),
+					',',
+					blue.toString(),
+					')'
+				)
+			);
+	}
+
+	function _extractRGB(uint8 color)
+		internal
+		pure
+		returns (
+			uint8 r,
+			uint8 g,
+			uint8 b
+		)
+	{
+		r = color >> 5;
+		g = (color >> 2) & 7;
+		b = color & 3;
 	}
 }
