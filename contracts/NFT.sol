@@ -45,7 +45,7 @@ contract NFT is ERC721 {
 	}
 
 	// TODO: change names
-	function getTokenURI(uint256 tokenID) public view returns (string memory) {
+	function tokenURI(uint256 tokenID) public view override returns (string memory) {
 		bytes memory dataURI = abi.encodePacked(
 			'{',
 			'"name": "Game NFT #',
