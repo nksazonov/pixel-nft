@@ -21,18 +21,18 @@ contract NFT is ERC721 {
 	Counters.Counter private _tokenIDs;
 
 	// NFT size
-	uint8 constant NFT_SIZE = 15;
+	uint8 constant PIXELS_AMOUNT = 15;
 
 	// max image pixel size
-	uint8 constant NFT_PIXEL_SIZE = 12;
+	uint8 constant PIXEL_SIZE = 12;
 
 	// max image size
-	// TODO: report bug
-	// uint16 constant NFT_IMAGE_SIZE = NFT_SIZE * NFT_PIXEL_SIZE;
-	uint16 constant NFT_IMAGE_SIZE = 180;
+	// when dynamically calculating image size, OpenZeppelin's `toString` reverts
+	// uint16 constant IMAGE_SIZE = PIXELS_AMOUNT * PIXEL_SIZE;
+	uint16 constant IMAGE_SIZE = 180;
 
 	// tokenID to token data
-	mapping(uint256 => uint8[NFT_SIZE][NFT_SIZE]) private _tokenDatas;
+	mapping(uint256 => uint8[PIXELS_AMOUNT][PIXELS_AMOUNT]) private _pixelsOf;
 
 	constructor() ERC721('NFT Game', 'NFTG') {}
 
@@ -44,7 +44,6 @@ contract NFT is ERC721 {
 		_tokenIDs.increment();
 	}
 
-	// TODO: change names
 	function tokenURI(uint256 tokenID) public view override returns (string memory) {
 		bytes memory dataURI = abi.encodePacked(
 			'{',
@@ -53,30 +52,34 @@ contract NFT is ERC721 {
 			'",',
 			'"description": "Pixel NFT",',
 			'"image": "',
-			getTokenSVG(tokenID),
+			tokenSVG(tokenID),
 			'"',
 			'}'
 		);
 		return string(abi.encodePacked('data:application/json;base64,', Base64.encode(dataURI)));
 	}
 
-	function getTokenSVG(uint256 tokenID) public view returns (string memory) {
+	function tokenSVG(uint256 tokenID) public view returns (string memory) {
 		bytes memory svg = abi.encodePacked(
 			'<svg ',
 			'xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" ',
 			'viewBox="0 0 ',
-			NFT_IMAGE_SIZE.toString(),
+			IMAGE_SIZE.toString(),
 			' ',
-			NFT_IMAGE_SIZE.toString(),
+			IMAGE_SIZE.toString(),
 			'">',
-			_getPixelsSVG(tokenID),
+			_pixelSVG(tokenID),
 			'</svg>'
 		);
 		return string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(svg)));
 	}
 
-	function getTokenData(uint256 tokenID) public view returns (uint8[NFT_SIZE][NFT_SIZE] memory) {
-		return _tokenDatas[tokenID];
+	function tokenData(uint256 tokenID)
+		public
+		view
+		returns (uint8[PIXELS_AMOUNT][PIXELS_AMOUNT] memory)
+	{
+		return _pixelsOf[tokenID];
 	}
 
 	// =================
@@ -88,11 +91,11 @@ contract NFT is ERC721 {
 		uint256 presentPixels = uint256(keccak256(abi.encode(block.timestamp)));
 		uint256 pixelColorSeed = uint256(keccak256(abi.encode(block.number)));
 
-		for (uint8 row = 0; row < NFT_SIZE; row++) {
-			for (uint8 col = 0; col < NFT_SIZE; col++) {
-				if (_bitPresent(presentPixels, row * NFT_SIZE + col)) {
+		for (uint8 row = 0; row < PIXELS_AMOUNT; row++) {
+			for (uint8 col = 0; col < PIXELS_AMOUNT; col++) {
+				if (_bitPresent(presentPixels, row * PIXELS_AMOUNT + col)) {
 					uint8 color = uint8((pixelColorSeed >> ((row + 1) * (col + 1))) % 256);
-					_tokenDatas[tokenID][row][col] = color;
+					_pixelsOf[tokenID][row][col] = color;
 				}
 			}
 		}
@@ -102,14 +105,14 @@ contract NFT is ERC721 {
 		return ((num >> bitIdx) % 2 == 1);
 	}
 
-	function _getPixelsSVG(uint256 tokenID) internal view returns (bytes memory) {
+	function _pixelSVG(uint256 tokenID) internal view returns (bytes memory) {
 		bytes memory rows;
 
-		for (uint8 row = 0; row < NFT_SIZE; row++) {
+		for (uint8 row = 0; row < PIXELS_AMOUNT; row++) {
 			bytes memory cols;
-			for (uint8 col = 0; col < NFT_SIZE; col++) {
-				uint16 x = row * NFT_PIXEL_SIZE;
-				uint16 y = col * NFT_PIXEL_SIZE;
+			for (uint8 col = 0; col < PIXELS_AMOUNT; col++) {
+				uint16 x = row * PIXEL_SIZE;
+				uint16 y = col * PIXEL_SIZE;
 
 				cols = abi.encodePacked(
 					cols,
@@ -120,12 +123,12 @@ contract NFT is ERC721 {
 					y.toString(),
 					'" ',
 					'width="',
-					NFT_PIXEL_SIZE.toString(),
+					PIXEL_SIZE.toString(),
 					'" height="',
-					NFT_PIXEL_SIZE.toString(),
+					PIXEL_SIZE.toString(),
 					'" ',
 					'fill="',
-					_8bitToRGB(_tokenDatas[tokenID][row][col]),
+					_8bitToRGB(_pixelsOf[tokenID][row][col]),
 					'" ',
 					'/>'
 				);
