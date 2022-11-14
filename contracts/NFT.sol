@@ -17,11 +17,17 @@ contract NFT is ERC721 {
 	using Strings for uint256;
 	using Counters for Counters.Counter;
 
+	constructor() ERC721('NFT Game', 'NFTG') {}
+
+	// =================
+	// NFT
+	// =================
+
 	// incremental token IDs
 	Counters.Counter private _tokenIDs;
 
 	// NFT size
-	uint8 constant PIXELS_AMOUNT = 15;
+	uint8 constant PIXELS_AMOUNT = 8;
 
 	// max image pixel size
 	uint8 constant PIXEL_SIZE = 12;
@@ -29,19 +35,25 @@ contract NFT is ERC721 {
 	// max image size
 	// when dynamically calculating image size, OpenZeppelin's `toString` reverts
 	// uint16 constant IMAGE_SIZE = PIXELS_AMOUNT * PIXEL_SIZE;
-	uint16 constant IMAGE_SIZE = 180;
+	uint16 constant IMAGE_SIZE = 96;
 
 	// tokenID to token data
 	mapping(uint256 => uint8[PIXELS_AMOUNT][PIXELS_AMOUNT]) private _pixelsOf;
 
-	constructor() ERC721('NFT Game', 'NFTG') {}
-
 	function mint() public {
+		address minter = msg.sender;
+
 		uint256 newTokenID = _tokenIDs.current();
-		_safeMint(msg.sender, newTokenID);
+		_safeMint(minter, newTokenID);
 		_createRandomNFT(newTokenID);
 
+		_grantChangeablePixels(minter, START_CHANGEABLE_PIXELS);
+
 		_tokenIDs.increment();
+	}
+
+	function tokenPixelSize() external pure returns (uint8) {
+		return PIXELS_AMOUNT;
 	}
 
 	function tokenURI(uint256 tokenID) public view override returns (string memory) {
@@ -83,7 +95,7 @@ contract NFT is ERC721 {
 	}
 
 	// =================
-	// INTERNAL
+	// INTERNAL NFT
 	// =================
 
 	// TODO: use better randomizing source
@@ -95,7 +107,7 @@ contract NFT is ERC721 {
 			for (uint8 col = 0; col < PIXELS_AMOUNT; col++) {
 				if (_bitPresent(presentPixels, row * PIXELS_AMOUNT + col)) {
 					uint8 color = uint8((pixelColorSeed >> ((row + 1) * (col + 1))) % 256);
-					_pixelsOf[tokenID][row][col] = color;
+					_pixelsOf[tokenID][col][row] = color;
 				}
 			}
 		}
@@ -128,7 +140,7 @@ contract NFT is ERC721 {
 					PIXEL_SIZE.toString(),
 					'" ',
 					'fill="',
-					_8bitToRGB(_pixelsOf[tokenID][row][col]),
+					_8bitToRGB(_pixelsOf[tokenID][col][row]),
 					'" ',
 					'/>'
 				);
@@ -137,6 +149,58 @@ contract NFT is ERC721 {
 		}
 
 		return rows;
+	}
+
+	function _requireCallerOwner(uint256 tokenId) internal view {
+		require(msg.sender == ownerOf(tokenId), 'Caller is not token owner');
+	}
+
+	// =================
+	// CHANGEABLE PIXELS
+	// =================
+
+	// start changeable pixels
+	uint256 constant START_CHANGEABLE_PIXELS = PIXELS_AMOUNT;
+
+	// account to amount of changeable pixels
+	mapping(address => uint256) private _changeablePixelsOf;
+
+	struct ChangePixelPayload {
+		uint8 row;
+		uint8 col;
+		uint8 newColor;
+	}
+
+	function changePixel(uint256 tokenId, ChangePixelPayload memory cpp) public {
+		_requireCallerOwner(tokenId);
+		_requireHasChangeablePixels(msg.sender, 1);
+
+		_changePixel(tokenId, cpp);
+	}
+
+	function changePixels(uint256 tokenId, ChangePixelPayload[] memory cpps) external {
+		_requireCallerOwner(tokenId);
+		_requireHasChangeablePixels(msg.sender, cpps.length);
+
+		for (uint256 i = 0; i < cpps.length; i++) {
+			_changePixel(tokenId, cpps[i]);
+		}
+	}
+
+	// =================
+	// INTERNAL CHANGEABLE PIXELS
+	// =================
+
+	function _grantChangeablePixels(address account, uint256 amount) internal {
+		_changeablePixelsOf[account] += amount;
+	}
+
+	function _requireHasChangeablePixels(address account, uint256 amount) internal view {
+		require(_changeablePixelsOf[account] >= amount, 'Not enough changeable pixels');
+	}
+
+	function _changePixel(uint256 tokenId, ChangePixelPayload memory cpd) internal {
+		_pixelsOf[tokenId][cpd.col][cpd.row] = cpd.newColor;
 	}
 
 	// =================
