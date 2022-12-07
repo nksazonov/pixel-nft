@@ -10,7 +10,6 @@ import '@openzeppelin/contracts/utils/Base64.sol';
 // NOTE: max number of colors is 256.
 // NOTE: max resolution of NFT picture is 2^16 x 2^16.
 
-// TODO: refactor
 contract NFT is ERC721 {
 	using Strings for uint8;
 	using Strings for uint16;
@@ -24,7 +23,7 @@ contract NFT is ERC721 {
 	// =================
 
 	// incremental token IDs
-	Counters.Counter private _tokenIDs;
+	Counters.Counter public lastTokenID;
 
 	// NFT size
 	uint8 constant PIXELS_AMOUNT = 8;
@@ -38,18 +37,34 @@ contract NFT is ERC721 {
 	uint16 constant IMAGE_SIZE = 96;
 
 	// tokenID to token data
-	mapping(uint256 => uint8[PIXELS_AMOUNT][PIXELS_AMOUNT]) private _pixelsOf;
+	mapping(uint256 => uint8[PIXELS_AMOUNT][PIXELS_AMOUNT]) public pixelsOf;
+
+	// user to array of token IDs
+	mapping(address => uint256[]) public tokensOf;
+
+	// start changeable pixels
+	uint256 constant START_CHANGEABLE_PIXELS = PIXELS_AMOUNT;
+
+	struct ChangePixelPayload {
+		uint8 row;
+		uint8 col;
+		uint8 newColor;
+	}
+
+	// account to amount of changeable pixels
+	mapping(address => uint256) public changeablePixelsOf;
 
 	function mint() public {
 		address minter = msg.sender;
 
-		uint256 newTokenID = _tokenIDs.current();
+		uint256 newTokenID = lastTokenID.current();
 		_safeMint(minter, newTokenID);
 		_createRandomNFT(newTokenID);
+		tokensOf[minter].push(newTokenID);
 
 		_grantChangeablePixels(minter, START_CHANGEABLE_PIXELS);
 
-		_tokenIDs.increment();
+		lastTokenID.increment();
 	}
 
 	function tokenPixelSize() external pure returns (uint8) {
@@ -86,14 +101,6 @@ contract NFT is ERC721 {
 		return string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(svg)));
 	}
 
-	function tokenData(uint256 tokenID)
-		public
-		view
-		returns (uint8[PIXELS_AMOUNT][PIXELS_AMOUNT] memory)
-	{
-		return _pixelsOf[tokenID];
-	}
-
 	// =================
 	// INTERNAL NFT
 	// =================
@@ -107,7 +114,7 @@ contract NFT is ERC721 {
 			for (uint8 col = 0; col < PIXELS_AMOUNT; col++) {
 				if (_bitPresent(presentPixels, row * PIXELS_AMOUNT + col)) {
 					uint8 color = uint8((pixelColorSeed >> ((row + 1) * (col + 1))) % 256);
-					_pixelsOf[tokenID][col][row] = color;
+					pixelsOf[tokenID][col][row] = color;
 				}
 			}
 		}
@@ -140,7 +147,7 @@ contract NFT is ERC721 {
 					PIXEL_SIZE.toString(),
 					'" ',
 					'fill="',
-					_8bitToRGB(_pixelsOf[tokenID][col][row]),
+					_8bitToRGB(pixelsOf[tokenID][col][row]),
 					'" ',
 					'/>'
 				);
@@ -159,23 +166,18 @@ contract NFT is ERC721 {
 	// CHANGEABLE PIXELS
 	// =================
 
-	// start changeable pixels
-	uint256 constant START_CHANGEABLE_PIXELS = PIXELS_AMOUNT;
-
-	// account to amount of changeable pixels
-	mapping(address => uint256) private _changeablePixelsOf;
-
-	struct ChangePixelPayload {
-		uint8 row;
-		uint8 col;
-		uint8 newColor;
-	}
-
 	function changePixel(uint256 tokenId, ChangePixelPayload memory cpp) public {
 		_requireCallerOwner(tokenId);
 		_requireHasChangeablePixels(msg.sender, 1);
 
 		_changePixel(tokenId, cpp);
+	}
+
+	function changePixelTxData(
+		uint256 tokenId,
+		ChangePixelPayload memory cpp
+	) external pure returns (bytes memory) {
+		return abi.encode(tokenId, cpp);
 	}
 
 	function changePixels(uint256 tokenId, ChangePixelPayload[] memory cpps) external {
@@ -187,20 +189,27 @@ contract NFT is ERC721 {
 		}
 	}
 
+	function changePixelsTxData(
+		uint256 tokenId,
+		ChangePixelPayload[] memory cpps
+	) external pure returns (bytes memory) {
+		return abi.encode(tokenId, cpps);
+	}
+
 	// =================
 	// INTERNAL CHANGEABLE PIXELS
 	// =================
 
 	function _grantChangeablePixels(address account, uint256 amount) internal {
-		_changeablePixelsOf[account] += amount;
+		changeablePixelsOf[account] += amount;
 	}
 
 	function _requireHasChangeablePixels(address account, uint256 amount) internal view {
-		require(_changeablePixelsOf[account] >= amount, 'Not enough changeable pixels');
+		require(changeablePixelsOf[account] >= amount, 'Not enough changeable pixels');
 	}
 
-	function _changePixel(uint256 tokenId, ChangePixelPayload memory cpd) internal {
-		_pixelsOf[tokenId][cpd.col][cpd.row] = cpd.newColor;
+	function _changePixel(uint256 tokenId, ChangePixelPayload memory cpp) internal {
+		pixelsOf[tokenId][cpp.col][cpp.row] = cpp.newColor;
 	}
 
 	// =================
@@ -227,15 +236,7 @@ contract NFT is ERC721 {
 			);
 	}
 
-	function _extractRGB(uint8 color)
-		internal
-		pure
-		returns (
-			uint8 r,
-			uint8 g,
-			uint8 b
-		)
-	{
+	function _extractRGB(uint8 color) internal pure returns (uint8 r, uint8 g, uint8 b) {
 		r = color >> 5;
 		g = (color >> 2) & 7;
 		b = color & 3;
