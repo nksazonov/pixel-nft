@@ -6,7 +6,7 @@ import type { NFT } from '../typechain/contracts/NFT';
 interface ChangePixelPayload {
   row: number;
   col: number;
-  color: number;
+  newColor: number;
 }
 
 async function main(): Promise<void> {
@@ -16,12 +16,12 @@ async function main(): Promise<void> {
   const tokenID = process.env.TOKEN_ID ?? 0;
   const row = process.env.ROW as unknown as number;
   const color = process.env.COLOR as unknown as number;
-  const pixelAmount = (await NFT.tokenPixelSize()) as number;
+  const pixelAmount = await NFT.tokenPixelSize();
 
   const payloads = [] as ChangePixelPayload[];
 
   for (let i = 0; i < pixelAmount; i++) {
-    payloads.push({ row, col: i, color });
+    payloads.push({ row: i, col: row, newColor: color });
   }
 
   await NFT.changePixels(tokenID, payloads);
